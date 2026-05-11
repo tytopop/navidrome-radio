@@ -1,5 +1,7 @@
 <div align="center">
 
+**🇬🇧 English** · [🇷🇺 Русский](README.ru.md)
+
 # 🎧 navidrome-radio
 
 **Turn your Navidrome music library into a live internet radio stream**
