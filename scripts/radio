@@ -1,0 +1,104 @@
+#!/bin/bash
+# navidrome-radio — stream control script
+# Usage: radio on | off | status | update | restart | logs
+
+set -euo pipefail
+
+STREAM_IP=$(grep -oP '(?<=<hostname>)[^<]+' /etc/icecast2/icecast.xml 2>/dev/null || echo "localhost")
+STREAM_URL="http://${STREAM_IP}:8000/radio"
+STATUS_URL="http://${STREAM_IP}:8000/status.xsl"
+
+_is_active() { systemctl is-active "$1" &>/dev/null; }
+
+cmd="${1:-help}"
+
+case "$cmd" in
+    on|start)
+        echo "🚀 Starting radio stream …"
+
+        systemctl start icecast2
+        sleep 1
+        systemctl start radio-playlist.timer
+
+        echo "   Updating playlist …"
+        python3 /etc/radio/gen_playlist.py || true
+
+        systemctl restart radio-liquidsoap
+
+        # Wait up to 10 seconds for liquidsoap to come up
+        for i in $(seq 1 10); do
+            sleep 1
+            _is_active radio-liquidsoap && break
+        done
+
+        if _is_active radio-liquidsoap; then
+            echo ""
+            echo "✅ Radio is live!"
+            echo "   Stream  : $STREAM_URL"
+            echo "   Status  : $STATUS_URL"
+            echo "   Admin   : http://${STREAM_IP}:8000/admin/"
+        else
+            echo "❌ Liquidsoap failed to start."
+            echo "   Check logs: journalctl -u radio-liquidsoap -n 30"
+            exit 1
+        fi
+        ;;
+
+    off|stop)
+        echo "🛑 Stopping radio stream …"
+        systemctl stop radio-liquidsoap  2>/dev/null || true
+        systemctl stop radio-playlist.timer 2>/dev/null || true
+        systemctl stop icecast2          2>/dev/null || true
+        echo "✅ Radio stopped."
+        ;;
+
+    restart)
+        "$0" off
+        sleep 2
+        "$0" on
+        ;;
+
+    status|st)
+        echo "📊 Radio service status:"
+        printf "   %-18s %s\n" "icecast2:"          "$(systemctl is-active icecast2          2>/dev/null || echo inactive)"
+        printf "   %-18s %s\n" "radio-liquidsoap:"  "$(systemctl is-active radio-liquidsoap  2>/dev/null || echo inactive)"
+        printf "   %-18s %s\n" "playlist timer:"    "$(systemctl is-active radio-playlist.timer 2>/dev/null || echo inactive)"
+        echo ""
+
+        if _is_active radio-liquidsoap; then
+            NOW=$(curl -sf "http://127.0.0.1:8000/status-json.xsl" \
+                | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+s = d.get('icestats', {}).get('source', [])
+if isinstance(s, dict): s = [s]
+print(s[0].get('title', 'metadata unavailable') if s else 'no active mount')
+" 2>/dev/null || echo "stream not responding")
+            echo "   Now playing: $NOW"
+            echo "   Stream URL : $STREAM_URL"
+        fi
+        ;;
+
+    update|up)
+        echo "🔄 Refreshing playlist …"
+        python3 /etc/radio/gen_playlist.py
+        ;;
+
+    logs)
+        journalctl -u radio-liquidsoap -f --no-pager
+        ;;
+
+    help|*)
+        cat <<EOF
+Usage: radio <command>
+
+Commands:
+  on        Start icecast2, liquidsoap and the playlist timer
+  off       Stop all radio services
+  restart   Stop then start
+  status    Show service status and current track
+  update    Regenerate the M3U playlist now
+  logs      Tail liquidsoap logs (Ctrl+C to exit)
+EOF
+        ;;
+esac

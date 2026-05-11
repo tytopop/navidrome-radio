@@ -1,0 +1,12 @@
+# Generated at runtime — never commit
+/etc/radio/radio.m3u
+/etc/radio/radio.conf
+
+# Local overrides
+*.local
+*.env
+.env*
+
+# OS
+.DS_Store
+Thumbs.db

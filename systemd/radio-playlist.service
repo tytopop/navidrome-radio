@@ -1,0 +1,7 @@
+[Unit]
+Description=Update Navidrome Radio Playlist
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /etc/radio/gen_playlist.py
+EnvironmentFile=-/etc/radio/radio.conf

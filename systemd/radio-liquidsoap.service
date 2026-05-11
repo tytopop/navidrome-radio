@@ -1,0 +1,17 @@
+[Unit]
+Description=Liquidsoap Radio Stream (Navidrome)
+Documentation=https://github.com/tytopop/navidrome-radio
+After=icecast2.service network-online.target
+Wants=icecast2.service network-online.target
+
+[Service]
+Type=simple
+# Refresh playlist on every start
+ExecStartPre=/usr/bin/python3 /etc/radio/gen_playlist.py
+ExecStart=/usr/bin/liquidsoap /etc/liquidsoap/radio.liq
+Restart=on-failure
+RestartSec=10
+EnvironmentFile=-/etc/radio/radio.conf
+
+[Install]
+WantedBy=multi-user.target

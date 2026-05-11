@@ -1,0 +1,10 @@
+[Unit]
+Description=Update Navidrome Radio Playlist Every Hour
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
